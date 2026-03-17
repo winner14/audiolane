@@ -8,10 +8,10 @@
 import SwiftUI
 
 @main
-struct DeciSwitchApp: App {
+struct AudioRouterApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
     var body: some Scene {
-        WindowGroup {
-            ContentView()
-        }
+        Settings { EmptyView() }
     }
 }
