@@ -36,6 +36,13 @@ brew install --cask audiolane
 
 BlackHole will be installed automatically as part of the process.
 
+### Updating
+
+To update AudioLane to the latest version:
+```bash
+brew upgrade --cask audiolane
+```
+
 ### First launch
 
 Since AudioLane is not yet notarized, macOS will show a security warning on first launch.
