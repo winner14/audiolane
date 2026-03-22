@@ -99,7 +99,7 @@ struct ContentView: View {
     // MARK: - Tab Bar
     var tabBar: some View {
         HStack(spacing: 0) {
-            TabButton(title: "APP ROUTES", icon: "arrow.triangle.branch", isSelected: selectedTab == .routes) {
+            TabButton(title: "APPLICATIONS", icon: "arrow.triangle.branch", isSelected: selectedTab == .routes) {
                 selectedTab = .routes
             }
             TabButton(title: "DEVICES", icon: "hifispeaker.2", isSelected: selectedTab == .devices) {
@@ -136,7 +136,7 @@ struct ContentView: View {
                         emptyState(icon: "speaker.slash", message: "No output devices found")
                     } else {
                         ForEach(audioManager.outputDevices) { device in
-                            DeviceRow(device: device)
+                            DeviceRow(device: device, audioManager: audioManager)
                         }
                     }
                 }
@@ -211,7 +211,7 @@ struct TabButton: View {
                     .tracking(1.5)
             }
             .foregroundColor(isSelected ? Color(red: 0.4, green: 0.8, blue: 1.0) : .white.opacity(0.3))
-            .padding(.horizontal, 12)
+            .frame(maxWidth: .infinity)
             .padding(.vertical, 6)
             .background(isSelected ? Color(red: 0.4, green: 0.8, blue: 1.0).opacity(0.1) : Color.clear)
             .clipShape(RoundedRectangle(cornerRadius: 6))
@@ -340,46 +340,141 @@ struct AppRouteRow: View {
 // MARK: - Device Row
 struct DeviceRow: View {
     let device: AudioDevice
-    @State private var isHovered = false
+    @ObservedObject var audioManager: AudioManager
+    @State private var isExpanded = false
+    @State private var volume: Float = 0.75
+    @State private var isMuted = false
+
+    var isPrimary: Bool {
+        audioManager.primaryDeviceID == device.id
+    }
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: iconForTransport(device.transportType))
-                .font(.system(size: 14))
-                .foregroundColor(Color(red: 0.4, green: 0.8, blue: 1.0))
-                .frame(width: 28)
+        VStack(spacing: 0) {
+            HStack(spacing: 12) {
+                // Device icon
+                Image(systemName: iconForTransport(device.transportType))
+                    .font(.system(size: 14))
+                    .foregroundColor(isExpanded ? Color(red: 0.4, green: 0.8, blue: 1.0) : .white.opacity(0.6))
+                    .frame(width: 28)
 
-            VStack(alignment: .leading, spacing: 2) {
-                Text(device.name)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.white.opacity(0.85))
-                Text(device.transportType)
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.3))
+                // Device info
+                VStack(alignment: .leading, spacing: 2) {
+                    if audioManager.supportsVolumeControl(device.id) {
+                        Text(isMuted ? "Muted" : "\(Int(volume * 100))%")
+                            .font(.system(size: 9, weight: .bold, design: .monospaced))
+                            .foregroundColor(isMuted ? Color(red: 1.0, green: 0.4, blue: 0.4) : Color(red: 0.4, green: 0.8, blue: 1.0))
+                            .tracking(1)
+                    }
+
+                    Text(device.name)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.85))
+
+                    Text(device.transportType.uppercased())
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.25))
+                        .tracking(1.5)
+                }
+
+                Spacer()
+
+                // Star — set as primary
+                Button(action: {
+                    audioManager.setPrimaryDevice(device.id)
+                }) {
+                    Image(systemName: isPrimary ? "star.fill" : "star")
+                        .font(.system(size: 12))
+                        .foregroundColor(isPrimary ? Color(red: 1.0, green: 0.85, blue: 0.3) : .white.opacity(0.2))
+                }
+                .buttonStyle(.plain)
+                .help(isPrimary ? "Primary device — keyboard volume controls this" : "Set as primary device")
+
+                // Expand chevron
+                if audioManager.supportsVolumeControl(device.id) {
+                    Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.3))
+                        .onTapGesture {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isExpanded.toggle()
+                            }
+                        }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if audioManager.supportsVolumeControl(device.id) {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isExpanded.toggle()
+                    }
+                }
             }
 
-            Spacer()
+            // Expanded volume panel
+            if isExpanded && audioManager.supportsVolumeControl(device.id) {
+                VStack(spacing: 8) {
+                    Divider()
+                        .background(Color.white.opacity(0.06))
 
-            Text(device.transportType.uppercased())
-                .font(.system(size: 8, weight: .bold, design: .monospaced))
-                .foregroundColor(Color(red: 0.4, green: 0.8, blue: 1.0).opacity(0.6))
-                .tracking(1.5)
-                .padding(.horizontal, 6)
-                .padding(.vertical, 3)
-                .background(Color(red: 0.4, green: 0.8, blue: 1.0).opacity(0.08))
-                .clipShape(RoundedRectangle(cornerRadius: 4))
+                    HStack(spacing: 10) {
+                        Button(action: {
+                            audioManager.toggleMute(for: device.id)
+                            isMuted = audioManager.isMuted(device.id)
+                        }) {
+                            Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(isMuted ? Color(red: 1.0, green: 0.4, blue: 0.4) : .white.opacity(0.5))
+                                .frame(width: 24)
+                        }
+                        .buttonStyle(.plain)
+
+                        Slider(value: Binding(
+                            get: { Double(volume) },
+                            set: { newValue in
+                                volume = Float(newValue)
+                                audioManager.setVolume(volume, for: device.id)
+                                if isMuted && volume > 0 {
+                                    audioManager.toggleMute(for: device.id)
+                                    isMuted = false
+                                }
+                            }
+                        ), in: 0...1)
+                        .tint(Color(red: 0.4, green: 0.8, blue: 1.0))
+
+                        Image(systemName: volume > 0.5 ? "speaker.wave.3.fill" : volume > 0 ? "speaker.wave.1.fill" : "speaker.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(.white.opacity(0.4))
+                            .frame(width: 24)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 10)
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isHovered ? Color.white.opacity(0.05) : Color.white.opacity(0.02))
+                .fill(isPrimary ? Color(red: 1.0, green: 0.85, blue: 0.3).opacity(0.05) : isExpanded ? Color.white.opacity(0.05) : Color.white.opacity(0.02))
                 .overlay(
                     RoundedRectangle(cornerRadius: 8)
-                        .stroke(Color.white.opacity(0.05), lineWidth: 0.5)
+                        .stroke(isPrimary ? Color(red: 1.0, green: 0.85, blue: 0.3).opacity(0.25) : isExpanded ? Color(red: 0.4, green: 0.8, blue: 1.0).opacity(0.3) : Color.white.opacity(0.05), lineWidth: 0.5)
                 )
         )
-        .onHover { isHovered = $0 }
+        .onAppear {
+            volume = audioManager.getVolume(for: device.id) ?? 0.75
+            isMuted = audioManager.isMuted(device.id)
+            audioManager.startVolumeListening(for: device.id) {
+                volume = audioManager.getVolume(for: device.id) ?? volume
+                isMuted = audioManager.isMuted(device.id)
+            }
+        }
+        .onDisappear {
+                    audioManager.stopVolumeListening(for: device.id)
+                }
+
     }
 
     func iconForTransport(_ type: String) -> String {
