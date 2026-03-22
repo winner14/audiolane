@@ -10,6 +10,8 @@ class AudioMonitor: NSObject, ObservableObject {
     static let shared = AudioMonitor()
     private var deviceListenerAdded = false
     private var defaultDeviceListenerAdded = false
+    private var permissionTimer: Timer?
+    private var blackHoleVolumeListener: AudioObjectPropertyListenerBlock?
 
     override init() {
         super.init()
@@ -21,15 +23,78 @@ class AudioMonitor: NSObject, ObservableObject {
         addDefaultDeviceListener()
         startAppMonitoring()
         startPermissionMonitoring()
-        startSleepWakeMonitoring() // add this
-        print("✅ Audio monitor started")
+        startSleepWakeMonitoring()
+        startVolumeMonitoring()
+        print("Audio monitor started")
     }
     
     func stopMonitoring() {
         stopPermissionMonitoring()
         stopSleepWakeMonitoring()
+        stopVolumeMonitoring()
         NSWorkspace.shared.notificationCenter.removeObserver(self)
         print("⏹ Audio monitor stopped")
+    }
+    
+    // MARK: - Primary device set up
+    
+    func startVolumeMonitoring() {
+        guard let blackHoleID = AudioRoutingEngine.shared.findBlackHoleDeviceID() else {
+            print("❌ BlackHole not found for volume monitoring")
+            return
+        }
+
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            Task { @MainActor in
+                self?.mirrorBlackHoleVolume()
+            }
+        }
+
+        AudioObjectAddPropertyListenerBlock(blackHoleID, &propertyAddress, DispatchQueue.main, listener)
+        blackHoleVolumeListener = listener
+        print("✅ BlackHole volume listener started")
+    }
+
+    func stopVolumeMonitoring() {
+        guard let blackHoleID = AudioRoutingEngine.shared.findBlackHoleDeviceID(),
+              let listener = blackHoleVolumeListener else { return }
+
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        AudioObjectRemovePropertyListenerBlock(blackHoleID, &propertyAddress, DispatchQueue.main, listener)
+        blackHoleVolumeListener = nil
+        print("⏹ BlackHole volume listener stopped")
+    }
+
+    @MainActor
+    private func mirrorBlackHoleVolume() {
+        guard let blackHoleID = AudioRoutingEngine.shared.findBlackHoleDeviceID() else { return }
+        let primaryID = AudioManager.shared.primaryDeviceID
+        guard primaryID != 0 && primaryID != blackHoleID else { return }
+
+        // Get BlackHole's current volume
+        var volume: Float32 = 0
+        var dataSize = UInt32(MemoryLayout<Float32>.size)
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        AudioObjectGetPropertyData(blackHoleID, &propertyAddress, 0, nil, &dataSize, &volume)
+
+        // Apply to primary device
+        AudioManager.shared.setVolume(Float(volume), for: primaryID)
+        print("🔊 Mirrored BlackHole volume \(Int(volume * 100))% → primary device \(primaryID)")
     }
 
 
@@ -275,44 +340,56 @@ class AudioMonitor: NSObject, ObservableObject {
     
     // MARK: - Permission Monitoring
 
-    private var permissionTimer: Timer?
-
     func startPermissionMonitoring() {
-        permissionTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
-            Task { @MainActor in
-                do {
-                    try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
-                } catch {
-                    let err = error as NSError
-                    if err.code == -3801 {
-                        await self.handlePermissionRevoked()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+            self?.permissionTimer = Timer.scheduledTimer(
+                withTimeInterval: 15.0,
+                repeats: true
+            ) { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    do {
+                        try await SCShareableContent.excludingDesktopWindows(
+                            false,
+                            onScreenWindowsOnly: false
+                        )
+                    } catch {
+                        let err = error as NSError
+                        if err.code == -3801 {
+                            await self?.handlePermissionRevoked()
+                        }
                     }
                 }
             }
         }
     }
 
+    private func handlePermissionRevoked() async {
+        print("⚠️ Screen recording permission revoked")
+        
+        // Stop all routing
+        await AudioRoutingEngine.shared.stop()
+        
+        // Show a gentle notification instead of a blocking alert
+        let content = UNMutableNotificationContent()
+        content.title = "AudioLane — Permission Required"
+        content.body = "Screen Recording was disabled. Open AudioLane to re-enable routing."
+        content.sound = .default
+        
+        let request = UNNotificationRequest(
+            identifier: "permission-revoked",
+            content: content,
+            trigger: nil
+        )
+        try? await UNUserNotificationCenter.current().add(request)
+    }
+    
     func stopPermissionMonitoring() {
         permissionTimer?.invalidate()
         permissionTimer = nil
     }
 
-    private func handlePermissionRevoked() async {
-        print("⚠️ Screen recording permission revoked")
-        await AudioRoutingEngine.shared.stop()
-
-        await MainActor.run {
-            let alert = NSAlert()
-            alert.messageText = "Screen Recording Permission Revoked"
-            alert.informativeText = "AudioLane needs Screen Recording permission to route app audio. Please re-enable it in System Settings → Privacy & Security → Screen Recording, then relaunch the app."
-            alert.addButton(withTitle: "Open System Settings")
-            alert.addButton(withTitle: "Quit")
-            alert.alertStyle = .warning
-
-            if alert.runModal() == .alertFirstButtonReturn {
-                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
-            }
-            NSApplication.shared.terminate(nil)
-        }
-    }
+//    private func handlePermissionRevoked() async {
+//        print("⚠️ Screen recording permission revoked")
+//        await AudioRoutingEngine.shared.stop()
+//    }
 }

@@ -27,6 +27,7 @@ struct RunningApp: Identifiable {
 
 class AudioManager: NSObject, ObservableObject {
     @Published var outputDevices: [AudioDevice] = []
+    @Published var primaryDeviceID: AudioDeviceID = 0
     
     static let shared = AudioManager()
 
@@ -34,6 +35,7 @@ class AudioManager: NSObject, ObservableObject {
         super.init()
         fetchDevices()
         fetchRunningApps()
+        loadPrimaryDevice()
     }
 
     func fetchDevices() {
@@ -69,6 +71,23 @@ class AudioManager: NSObject, ObservableObject {
         DispatchQueue.main.async {
             self.outputDevices = devices
         }
+    }
+    
+    func setPrimaryDevice(_ deviceID: AudioDeviceID) {
+        primaryDeviceID = deviceID
+        UserDefaults.standard.set(Int(deviceID), forKey: "primaryDeviceID")
+//        print("Primary device set to: \(deviceID)")
+    }
+
+    func loadPrimaryDevice() {
+        let saved = UserDefaults.standard.integer(forKey: "primaryDeviceID")
+        if saved != 0 {
+            primaryDeviceID = AudioDeviceID(saved)
+        } else {
+            // Default to original system output on first launch
+            primaryDeviceID = AudioRoutingEngine.shared.getSystemOutputDevice()
+        }
+        print("Primary device loaded: \(primaryDeviceID)")
     }
 
     // MARK: - Helpers
@@ -188,7 +207,7 @@ class AudioManager: NSObject, ObservableObject {
     }
     
     func applyRoute(_ route: AppAudioRoute) {
-        print("🎯 applyRoute called for \(route.app.name) → \(route.outputDevice?.name ?? "default")")
+        print("applyRoute called for \(route.app.name) → \(route.outputDevice?.name ?? "default")")
         Task {
             do {
                 if let device = route.outputDevice {
@@ -197,7 +216,7 @@ class AudioManager: NSObject, ObservableObject {
                     await AudioRoutingEngine.shared.stopRouting(for: route.app)
                 }
             } catch {
-                print("❌ applyRoute error: \(error)")
+                print("applyRoute error: \(error)")
             }
         }
     }
@@ -218,7 +237,7 @@ class AudioManager: NSObject, ObservableObject {
             ]
         }
         UserDefaults.standard.set(data, forKey: routesKey)
-        print("💾 Saved \(data.count) routes")
+        print("Saved \(data.count) routes")
     }
 
     func restoreRoutes() {
@@ -239,7 +258,7 @@ class AudioManager: NSObject, ObservableObject {
 
             // Check if the saved device is still connected
             guard outputDevices.contains(where: { $0.id == deviceIDRaw }) else {
-                print("⚠️ Saved device '\(deviceName)' no longer connected — skipping \(bundleID)")
+                print("Saved device '\(deviceName)' no longer connected — skipping \(bundleID)")
                 continue
             }
 
@@ -255,8 +274,181 @@ class AudioManager: NSObject, ObservableObject {
 
             // Apply the route immediately
             applyRoute(routes[routeIndex])
-            print("✅ Restored route: \(bundleID) → \(deviceName)")
+//            print("Restored route: \(bundleID) → \(deviceName)")
         }
+    }
+    
+    @Published var launchAtLogin: Bool = UserDefaults.standard.bool(forKey: "launchAtLogin") {
+        didSet {
+            UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin")
+            setLaunchAtLogin(launchAtLogin)
+        }
+    }
+
+    private func setLaunchAtLogin(_ enable: Bool) {
+        if #available(macOS 13.0, *) {
+            do {
+                if enable {
+                    try SMAppService.loginItem(identifier: "winner-code.AudioLaneHelper").register()
+                    print("Helper registered for login")
+                } else {
+                    try SMAppService.loginItem(identifier: "winner-code.AudioLaneHelper").unregister()
+                    print("Helper unregistered from login")
+                }
+            } catch {
+                print("Login item error: \(error)")
+            }
+        }
+    }
+
+    func syncLaunchAtLoginState() {
+        if #available(macOS 13.0, *) {
+            let isRegistered = SMAppService.mainApp.status == .enabled
+            launchAtLogin = isRegistered
+        }
+    }
+    
+    // MARK: - Volume Control
+
+    func getVolume(for deviceID: AudioDeviceID) -> Float? {
+        var volume: Float32 = 0
+        var dataSize = UInt32(MemoryLayout<Float32>.size)
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        // Try main channel first
+        let status = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &dataSize, &volume)
+        if status == noErr { return volume }
+
+        // Try channel 1 if main fails
+        propertyAddress.mElement = 1
+        let status2 = AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &dataSize, &volume)
+        if status2 == noErr { return volume }
+
+        return nil
+    }
+
+    func setVolume(_ volume: Float, for deviceID: AudioDeviceID) {
+        var vol = Float32(volume)
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        let status = AudioObjectSetPropertyData(
+            deviceID,
+            &propertyAddress,
+            0, nil,
+            UInt32(MemoryLayout<Float32>.size),
+            &vol
+        )
+
+        if status != noErr {
+            // Try channel 1 and 2
+            propertyAddress.mElement = 1
+            AudioObjectSetPropertyData(deviceID, &propertyAddress, 0, nil, UInt32(MemoryLayout<Float32>.size), &vol)
+            propertyAddress.mElement = 2
+            AudioObjectSetPropertyData(deviceID, &propertyAddress, 0, nil, UInt32(MemoryLayout<Float32>.size), &vol)
+        }
+    }
+
+    func isMuted(_ deviceID: AudioDeviceID) -> Bool {
+        var muted: UInt32 = 0
+        var dataSize = UInt32(MemoryLayout<UInt32>.size)
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyMute,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &dataSize, &muted)
+        return muted == 1
+    }
+
+    func toggleMute(for deviceID: AudioDeviceID) {
+        let currentlyMuted = isMuted(deviceID)
+        var muted: UInt32 = currentlyMuted ? 0 : 1
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyMute,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        AudioObjectSetPropertyData(
+            deviceID,
+            &propertyAddress,
+            0, nil,
+            UInt32(MemoryLayout<UInt32>.size),
+            &muted
+        )
+    }
+
+    func supportsVolumeControl(_ deviceID: AudioDeviceID) -> Bool {
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        return AudioObjectHasProperty(deviceID, &propertyAddress)
+    }
+    
+    // MARK: - Per-Device Volume Listeners
+
+    private var volumeListeners: [AudioDeviceID: AudioObjectPropertyListenerBlock] = [:]
+    private var volumeCallbacks: [AudioDeviceID: () -> Void] = [:]
+
+    func startVolumeListening(for deviceID: AudioDeviceID, onChange: @escaping () -> Void) {
+        // Store callback
+        volumeCallbacks[deviceID] = onChange
+
+        var volumeAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var muteAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyMute,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        let listener: AudioObjectPropertyListenerBlock = { [weak self] _, _ in
+            DispatchQueue.main.async {
+                self?.volumeCallbacks[deviceID]?()
+            }
+        }
+
+        AudioObjectAddPropertyListenerBlock(deviceID, &volumeAddress, DispatchQueue.global(qos: .userInteractive), listener)
+        AudioObjectAddPropertyListenerBlock(deviceID, &muteAddress, DispatchQueue.global(qos: .userInteractive), listener)
+
+        volumeListeners[deviceID] = listener
+//        print("Volume listener added for device \(deviceID)")
+    }
+
+    func stopVolumeListening(for deviceID: AudioDeviceID) {
+        guard let listener = volumeListeners[deviceID] else { return }
+
+        var volumeAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyVolumeScalar,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        var muteAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyMute,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+
+        AudioObjectRemovePropertyListenerBlock(deviceID, &volumeAddress, DispatchQueue.global(qos: .userInteractive), listener)
+        AudioObjectRemovePropertyListenerBlock(deviceID, &muteAddress, DispatchQueue.global(qos: .userInteractive), listener)
+
+        volumeListeners.removeValue(forKey: deviceID)
+        volumeCallbacks.removeValue(forKey: deviceID)
+//        print("Volume listener removed for device \(deviceID)")
     }
     
     @Published var launchAtLogin: Bool = UserDefaults.standard.bool(forKey: "launchAtLogin") {

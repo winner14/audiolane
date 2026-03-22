@@ -34,7 +34,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Request notification permission
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
-            print(granted ? "✅ Notifications allowed" : "⚠️ Notifications denied")
+            print(granted ? "Notifications allowed" : "Notifications denied")
         }
         
         // Monitor for clicks outside the popover
@@ -44,15 +44,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        // Start engine and monitor
         Task {
-            await AudioRoutingEngine.shared.start()
-            AudioMonitor.shared.startMonitoring()
-        }
-
-        // Request screen capture permission
-        Task {
-            try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+            do {
+                try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+                print("Screen capture permission granted")
+                await AudioRoutingEngine.shared.start()
+                AudioMonitor.shared.startMonitoring()
+            } catch {
+                print("Permission denied — user can grant it in System Settings")
+                await AudioRoutingEngine.shared.start()
+                AudioMonitor.shared.startMonitoring()
+            }
         }
         
         DispatchQueue.main.async {
@@ -78,6 +80,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         }
     }
+    
+//    func showPermissionAlert() {
+//        let alert = NSAlert()
+//        alert.messageText = "Screen Recording Permission Required"
+//        alert.informativeText = "AudioLane needs Screen Recording permission to route app audio.\n\n1. Click Open System Settings\n2. Find AudioLane and toggle it ON\n3. Relaunch the app"
+//        alert.addButton(withTitle: "Open System Settings")
+//        alert.addButton(withTitle: "Quit")
+//        alert.alertStyle = .warning
+//
+//        if alert.runModal() == .alertFirstButtonReturn {
+//            NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+//        }
+//        NSApplication.shared.terminate(nil)
+//    }
 
     // MARK: - Menu Bar Icon
 
