@@ -150,6 +150,20 @@ struct ContentView: View {
     // MARK: - Footer
     var footer: some View {
         HStack {
+            // Launch at login toggle
+            HStack(spacing: 6) {
+                Toggle("", isOn: $audioManager.launchAtLogin)
+                    .toggleStyle(.switch)
+                    .scaleEffect(0.7)
+                    .frame(width: 36)
+                Text("LAUNCH AT LOGIN")
+                    .font(.system(size: 9, weight: .bold, design: .monospaced))
+                    .foregroundColor(.white.opacity(0.25))
+                    .tracking(1)
+            }
+
+            Spacer()
+
             // Active routes count
             let activeCount = audioManager.routes.filter { $0.outputDevice != nil }.count
             HStack(spacing: 4) {

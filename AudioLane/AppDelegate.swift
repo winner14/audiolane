@@ -9,6 +9,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var routingObserver: NSKeyValueObservation?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        AudioRoutingEngine.shared.restoreFromDefaultsIfNeeded()
+        
         // Create menu bar item
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
@@ -25,6 +27,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         popover.behavior = .transient
         popover.contentViewController = NSHostingController(rootView: ContentView())
         self.popover = popover
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.togglePopover()
+        }
 
         // Request notification permission
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { granted, _ in
@@ -47,6 +53,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Request screen capture permission
         Task {
             try? await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+        }
+        
+        DispatchQueue.main.async {
+            AudioManager.shared.syncLaunchAtLoginState()
         }
 
         // Observe route changes to update menu bar icon

@@ -6,8 +6,46 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		C7F2CB1E2F6F88920069E476 /* AudioLaneHelper in Copy Files (1 item) */ = {isa = PBXBuildFile; fileRef = C7F2CB142F6F63D00069E476 /* AudioLaneHelper */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		C7F2CB1F2F6F88B10069E476 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C71586A42F665D85006922A4 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C7F2CB132F6F63D00069E476;
+			remoteInfo = AudioLaneHelper;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		C7F2CB122F6F63D00069E476 /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+		C7F2CB1B2F6F641D0069E476 /* Copy Files (1 item) */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 6;
+			files = (
+				C7F2CB1E2F6F88920069E476 /* AudioLaneHelper in Copy Files (1 item) */,
+			);
+			name = "Copy Files (1 item)";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
 /* Begin PBXFileReference section */
 		C71586AC2F665D85006922A4 /* AudioLane.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AudioLane.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C7F2CB142F6F63D00069E476 /* AudioLaneHelper */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = AudioLaneHelper; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -29,10 +67,22 @@
 			path = AudioLane;
 			sourceTree = "<group>";
 		};
+		C7F2CB152F6F63D00069E476 /* AudioLaneHelper */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = AudioLaneHelper;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		C71586A92F665D85006922A4 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C7F2CB112F6F63D00069E476 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -46,6 +96,7 @@
 			isa = PBXGroup;
 			children = (
 				C71586AE2F665D85006922A4 /* AudioLane */,
+				C7F2CB152F6F63D00069E476 /* AudioLaneHelper */,
 				C71586AD2F665D85006922A4 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -54,6 +105,7 @@
 			isa = PBXGroup;
 			children = (
 				C71586AC2F665D85006922A4 /* AudioLane.app */,
+				C7F2CB142F6F63D00069E476 /* AudioLaneHelper */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -68,10 +120,12 @@
 				C71586A82F665D85006922A4 /* Sources */,
 				C71586A92F665D85006922A4 /* Frameworks */,
 				C71586AA2F665D85006922A4 /* Resources */,
+				C7F2CB1B2F6F641D0069E476 /* Copy Files (1 item) */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				C7F2CB202F6F88B10069E476 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				C71586AE2F665D85006922A4 /* AudioLane */,
@@ -82,6 +136,28 @@
 			productName = DeciSwitch;
 			productReference = C71586AC2F665D85006922A4 /* AudioLane.app */;
 			productType = "com.apple.product-type.application";
+		};
+		C7F2CB132F6F63D00069E476 /* AudioLaneHelper */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C7F2CB182F6F63D00069E476 /* Build configuration list for PBXNativeTarget "AudioLaneHelper" */;
+			buildPhases = (
+				C7F2CB102F6F63D00069E476 /* Sources */,
+				C7F2CB112F6F63D00069E476 /* Frameworks */,
+				C7F2CB122F6F63D00069E476 /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				C7F2CB152F6F63D00069E476 /* AudioLaneHelper */,
+			);
+			name = AudioLaneHelper;
+			packageProductDependencies = (
+			);
+			productName = AudioLaneHelper;
+			productReference = C7F2CB142F6F63D00069E476 /* AudioLaneHelper */;
+			productType = "com.apple.product-type.tool";
 		};
 /* End PBXNativeTarget section */
 
@@ -94,6 +170,9 @@
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					C71586AB2F665D85006922A4 = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					C7F2CB132F6F63D00069E476 = {
 						CreatedOnToolsVersion = 26.3;
 					};
 				};
@@ -113,6 +192,7 @@
 			projectRoot = "";
 			targets = (
 				C71586AB2F665D85006922A4 /* AudioLane */,
+				C7F2CB132F6F63D00069E476 /* AudioLaneHelper */,
 			);
 		};
 /* End PBXProject section */
@@ -135,7 +215,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C7F2CB102F6F63D00069E476 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C7F2CB202F6F88B10069E476 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C7F2CB132F6F63D00069E476 /* AudioLaneHelper */;
+			targetProxy = C7F2CB1F2F6F88B10069E476 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		C71586B52F665D86006922A4 /* Debug */ = {
@@ -267,7 +362,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 389XJ964KR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -290,7 +385,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "winner-code.AudioLane";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -320,7 +416,7 @@
 				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 2;
 				DEVELOPMENT_TEAM = 389XJ964KR;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
@@ -343,7 +439,8 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MARKETING_VERSION = 1.0;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				MARKETING_VERSION = 1.0.2;
 				PRODUCT_BUNDLE_IDENTIFIER = "winner-code.AudioLane";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
@@ -357,6 +454,38 @@
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		C7F2CB192F6F63D00069E476 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 389XJ964KR;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "winner-code.AudioLaneHelper";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		C7F2CB1A2F6F63D00069E476 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = 389XJ964KR;
+				ENABLE_HARDENED_RUNTIME = YES;
+				MACOSX_DEPLOYMENT_TARGET = 14.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "winner-code.AudioLaneHelper";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 			};
@@ -379,6 +508,15 @@
 			buildConfigurations = (
 				C71586B82F665D86006922A4 /* Debug */,
 				C71586B92F665D86006922A4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C7F2CB182F6F63D00069E476 /* Build configuration list for PBXNativeTarget "AudioLaneHelper" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C7F2CB192F6F63D00069E476 /* Debug */,
+				C7F2CB1A2F6F63D00069E476 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

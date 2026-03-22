@@ -17,16 +17,23 @@ class AudioRoutingEngine: NSObject {
     // MARK: - App Lifecycle
 
     func start() async {
+        print("🚀 AudioRoutingEngine starting...")
+        // LAYER 1 — Fix stuck BlackHole from previous session first
+        restoreFromDefaultsIfNeeded()
+        
         originalOutputDeviceID = getSystemOutputDevice()
         print("💾 Saved original output device: \(originalOutputDeviceID!)")
-
+        
         guard let blackHoleID = findBlackHoleDeviceID() else {
             print("❌ BlackHole not found")
             return
         }
         setSystemOutputDevice(blackHoleID)
         print("✅ System output → BlackHole")
-
+        
+        // Save the good device to UserDefaults
+        saveOriginalDeviceToDefaults()
+        
         await startPassthrough(excludingPIDs: [])
     }
 
@@ -52,6 +59,22 @@ class AudioRoutingEngine: NSObject {
             }
             try? await passthroughStream?.stopCapture()
         }
+    }
+    
+    func hasOutputChannels(_ deviceID: AudioDeviceID) -> Bool {
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyStreamConfiguration,
+            mScope: kAudioDevicePropertyScopeOutput,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var dataSize: UInt32 = 0
+        AudioObjectGetPropertyDataSize(deviceID, &propertyAddress, 0, nil, &dataSize)
+        guard dataSize > 0 else { return false }
+        let bufferList = UnsafeMutablePointer<AudioBufferList>.allocate(capacity: Int(dataSize))
+        defer { bufferList.deallocate() }
+        AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &dataSize, bufferList)
+        let buffers = UnsafeMutableAudioBufferListPointer(bufferList)
+        return buffers.contains { $0.mNumberChannels > 0 }
     }
 
     // MARK: - Passthrough
@@ -265,6 +288,114 @@ class AudioRoutingEngine: NSObject {
         passthroughStream = nil
         passthroughOutput = nil
         await startPassthrough(excludingPIDs: Array(activeStreams.keys))
+    }
+
+    func restoreFromDefaultsIfNeeded() {
+        let currentDevice = getSystemOutputDevice()
+        print("🔍 Current system output on launch: \(currentDevice)")
+
+        guard let blackHoleID = findBlackHoleDeviceID(),
+              currentDevice == blackHoleID else {
+            print("✅ System output is clean — no restore needed")
+            return
+        }
+
+        print("🔍 System stuck on BlackHole — restoring...")
+        let savedDeviceID = readSavedDeviceID()
+        print("🔍 Saved device ID: \(savedDeviceID)")
+
+        if savedDeviceID != 0 && isDeviceConnected(savedDeviceID) {
+            setSystemOutputDevice(savedDeviceID)
+            print("✅ Restored to saved device: \(savedDeviceID)")
+        } else if let speakerID = findBuiltInSpeaker() {
+            setSystemOutputDevice(speakerID)
+            print("✅ Restored to built-in speakers: \(speakerID)")
+        } else {
+            print("❌ Could not find any device to restore to")
+        }
+    }
+
+    private func isDeviceConnected(_ deviceID: AudioDeviceID) -> Bool {
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var dataSize: UInt32 = 0
+        AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &propertyAddress, 0, nil, &dataSize)
+        let count = Int(dataSize) / MemoryLayout<AudioDeviceID>.size
+        var deviceIDs = [AudioDeviceID](repeating: 0, count: count)
+        AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &propertyAddress, 0, nil, &dataSize, &deviceIDs)
+        return deviceIDs.contains(deviceID)
+    }
+
+    private func findBuiltInSpeaker() -> AudioDeviceID? {
+        var propertyAddress = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDevices,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var dataSize: UInt32 = 0
+        AudioObjectGetPropertyDataSize(AudioObjectID(kAudioObjectSystemObject), &propertyAddress, 0, nil, &dataSize)
+        let count = Int(dataSize) / MemoryLayout<AudioDeviceID>.size
+        var deviceIDs = [AudioDeviceID](repeating: 0, count: count)
+        AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &propertyAddress, 0, nil, &dataSize, &deviceIDs)
+
+        for id in deviceIDs {
+            var nameRef: CFString = "" as CFString
+            var nameSize = UInt32(MemoryLayout<CFString>.size)
+            var nameAddress = AudioObjectPropertyAddress(
+                mSelector: kAudioDevicePropertyDeviceNameCFString,
+                mScope: kAudioObjectPropertyScopeGlobal,
+                mElement: kAudioObjectPropertyElementMain
+            )
+            AudioObjectGetPropertyData(id, &nameAddress, 0, nil, &nameSize, &nameRef)
+            let name = nameRef as String
+
+            let isSpeaker = name.contains("Speakers") && !name.contains("Microphone")
+            if isSpeaker && hasOutputChannels(id) {
+                return id
+            }
+        }
+        return nil
+    }
+    
+    private func sharedDeviceFilePath() -> String {
+        let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let folder = dir.appendingPathComponent("AudioLane")
+        print("📁 Folder path: \(folder.path)")
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            print("📁 Folder created/exists")
+        } catch {
+            print("❌ Failed to create folder: \(error)")
+        }
+        return folder.appendingPathComponent("lastdevice").path
+    }
+
+    func saveOriginalDeviceToDefaults() {
+        guard let originalID = originalOutputDeviceID else {
+            print("❌ saveOriginalDeviceToDefaults: originalOutputDeviceID is nil")
+            return
+        }
+        let path = sharedDeviceFilePath()
+        let value = "\(originalID)"
+        print("💾 Attempting to save device \(originalID) to \(path)")
+        do {
+            try value.write(toFile: path, atomically: true, encoding: .utf8)
+            print("💾 Successfully saved to \(path)")
+        } catch {
+            print("❌ Failed to save: \(error)")
+        }
+    }
+
+    private func readSavedDeviceID() -> AudioDeviceID {
+        let path = sharedDeviceFilePath()
+        guard let value = try? String(contentsOfFile: path, encoding: .utf8),
+              let id = UInt32(value.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return 0
+        }
+        return AudioDeviceID(id)
     }
 }
 
