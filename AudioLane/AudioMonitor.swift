@@ -3,6 +3,7 @@ import Foundation
 import Combine
 import UserNotifications
 import AppKit
+import ScreenCaptureKit
 
 @MainActor
 class AudioMonitor: NSObject, ObservableObject {
@@ -19,13 +20,18 @@ class AudioMonitor: NSObject, ObservableObject {
         addDeviceListListener()
         addDefaultDeviceListener()
         startAppMonitoring()
+        startPermissionMonitoring()
+        startSleepWakeMonitoring() // add this
         print("✅ Audio monitor started")
     }
-
+    
     func stopMonitoring() {
-        removeListeners()
+        stopPermissionMonitoring()
+        stopSleepWakeMonitoring()
+        NSWorkspace.shared.notificationCenter.removeObserver(self)
         print("⏹ Audio monitor stopped")
     }
+
 
     // MARK: - Device List Changes (device plugged/unplugged)
 
@@ -221,5 +227,92 @@ class AudioMonitor: NSObject, ObservableObject {
     private func removeListeners() {
         // Listeners are automatically cleaned up when the object is deallocated
         NSWorkspace.shared.notificationCenter.removeObserver(self)
+    }
+    
+    func startSleepWakeMonitoring() {
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(handleSleep),
+            name: NSWorkspace.willSleepNotification,
+            object: nil
+        )
+        NSWorkspace.shared.notificationCenter.addObserver(
+            self,
+            selector: #selector(handleWake),
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
+        print("✅ Sleep/wake monitoring started")
+    }
+
+    @objc private func handleSleep() {
+        print("😴 Mac going to sleep — restoring audio")
+        AudioRoutingEngine.shared.restoreAudioSync()
+    }
+
+    @objc private func handleWake() {
+        print("☀️ Mac woke up — restarting audio engine")
+        Task {
+            // Small delay to let macOS fully wake audio subsystem
+            try? await Task.sleep(nanoseconds: 2_000_000_000)
+            await AudioRoutingEngine.shared.start()
+            print("✅ Audio engine restarted after wake")
+        }
+    }
+
+    func stopSleepWakeMonitoring() {
+        NSWorkspace.shared.notificationCenter.removeObserver(
+            self,
+            name: NSWorkspace.willSleepNotification,
+            object: nil
+        )
+        NSWorkspace.shared.notificationCenter.removeObserver(
+            self,
+            name: NSWorkspace.didWakeNotification,
+            object: nil
+        )
+    }
+    
+    // MARK: - Permission Monitoring
+
+    private var permissionTimer: Timer?
+
+    func startPermissionMonitoring() {
+        permissionTimer = Timer.scheduledTimer(withTimeInterval: 5.0, repeats: true) { _ in
+            Task { @MainActor in
+                do {
+                    try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
+                } catch {
+                    let err = error as NSError
+                    if err.code == -3801 {
+                        await self.handlePermissionRevoked()
+                    }
+                }
+            }
+        }
+    }
+
+    func stopPermissionMonitoring() {
+        permissionTimer?.invalidate()
+        permissionTimer = nil
+    }
+
+    private func handlePermissionRevoked() async {
+        print("⚠️ Screen recording permission revoked")
+        await AudioRoutingEngine.shared.stop()
+
+        await MainActor.run {
+            let alert = NSAlert()
+            alert.messageText = "Screen Recording Permission Revoked"
+            alert.informativeText = "AudioLane needs Screen Recording permission to route app audio. Please re-enable it in System Settings → Privacy & Security → Screen Recording, then relaunch the app."
+            alert.addButton(withTitle: "Open System Settings")
+            alert.addButton(withTitle: "Quit")
+            alert.alertStyle = .warning
+
+            if alert.runModal() == .alertFirstButtonReturn {
+                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+            }
+            NSApplication.shared.terminate(nil)
+        }
     }
 }
