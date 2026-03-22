@@ -3,6 +3,7 @@ import Foundation
 import Combine
 import UserNotifications
 import AppKit
+import ScreenCaptureKit
 
 @MainActor
 class AudioMonitor: NSObject, ObservableObject {
@@ -26,7 +27,7 @@ class AudioMonitor: NSObject, ObservableObject {
         startVolumeMonitoring()
         print("Audio monitor started")
     }
-
+    
     func stopMonitoring() {
         stopPermissionMonitoring()
         stopSleepWakeMonitoring()
@@ -95,6 +96,7 @@ class AudioMonitor: NSObject, ObservableObject {
         AudioManager.shared.setVolume(Float(volume), for: primaryID)
         print("🔊 Mirrored BlackHole volume \(Int(volume * 100))% → primary device \(primaryID)")
     }
+
 
     // MARK: - Device List Changes (device plugged/unplugged)
 

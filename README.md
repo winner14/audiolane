@@ -82,6 +82,7 @@ The menu bar icon shows how many routes are currently active.
 ## Uninstall
 ```bash
 brew uninstall --cask audiolane
+brew untap winner14/audiolane
 ```
 
 Your system audio will be fully restored on uninstall.

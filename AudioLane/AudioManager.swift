@@ -2,6 +2,7 @@ import CoreAudio
 import Foundation
 import Combine
 import Cocoa
+import ServiceManagement
 
 struct AudioDevice: Identifiable {
     let id: AudioDeviceID
@@ -448,5 +449,35 @@ class AudioManager: NSObject, ObservableObject {
         volumeListeners.removeValue(forKey: deviceID)
         volumeCallbacks.removeValue(forKey: deviceID)
 //        print("Volume listener removed for device \(deviceID)")
+    }
+    
+    @Published var launchAtLogin: Bool = UserDefaults.standard.bool(forKey: "launchAtLogin") {
+        didSet {
+            UserDefaults.standard.set(launchAtLogin, forKey: "launchAtLogin")
+            setLaunchAtLogin(launchAtLogin)
+        }
+    }
+
+    private func setLaunchAtLogin(_ enable: Bool) {
+        if #available(macOS 13.0, *) {
+            do {
+                if enable {
+                    try SMAppService.loginItem(identifier: "winner-code.AudioLaneHelper").register()
+                    print("✅ Helper registered for login")
+                } else {
+                    try SMAppService.loginItem(identifier: "winner-code.AudioLaneHelper").unregister()
+                    print("✅ Helper unregistered from login")
+                }
+            } catch {
+                print("❌ Login item error: \(error)")
+            }
+        }
+    }
+
+    func syncLaunchAtLoginState() {
+        if #available(macOS 13.0, *) {
+            let isRegistered = SMAppService.mainApp.status == .enabled
+            launchAtLogin = isRegistered
+        }
     }
 }
